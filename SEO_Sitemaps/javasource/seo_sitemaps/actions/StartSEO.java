@@ -90,7 +90,11 @@ public class StartSEO extends CustomJavaAction<java.lang.Void>
 	    public void processRequest(IMxRuntimeRequest iMxRuntimeRequest, IMxRuntimeResponse iMxRuntimeResponse, String s) throws Exception {
 	        
 	        String response = null;
-	        response = Core.microflowCall(sitemap_mf).execute(context);
+	        HttpRequest httpRequestParameter = getHTTPRequest(context, iMxRuntimeRequest);
+	        
+	        response = Core.microflowCall(sitemap_mf)
+	        		.withParam("HttpRequest", httpRequestParameter.getMendixObject())
+	        		.execute(context);
 	        iMxRuntimeResponse.getWriter().write(response);
 	        iMxRuntimeResponse.addHeader("Content-type", "application/xml");
 	        iMxRuntimeResponse.setStatus(HttpServletResponse.SC_OK);
@@ -105,7 +109,6 @@ public class StartSEO extends CustomJavaAction<java.lang.Void>
 		httpRequest.setContent(servletRequest.getReader().lines().collect(Collectors.joining()));
 		httpRequest.setHttpVersion(servletRequest.getProtocol());
 		httpRequest.setUri(servletRequest.getRequestURI());
-		
 		
 		Enumeration<String> headerNames = iMxRuntimeRequest.getHttpServletRequest().getHeaderNames();
         while(headerNames.hasMoreElements()) {
