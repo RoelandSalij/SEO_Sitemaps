@@ -10,7 +10,9 @@
 package seo_sitemaps.actions;
 
 import java.io.IOException;
+import java.security.InvalidParameterException;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.stream.Collectors;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -19,9 +21,12 @@ import com.mendix.externalinterface.connector.RequestHandler;
 import com.mendix.m2ee.api.IMxRuntimeRequest;
 import com.mendix.m2ee.api.IMxRuntimeResponse;
 import com.mendix.systemwideinterfaces.core.IContext;
+import com.mendix.systemwideinterfaces.core.IMendixObject;
 import com.mendix.webui.CustomJavaAction;
 import system.proxies.HttpHeader;
 import system.proxies.HttpRequest;
+import system.proxies.HttpResponse;
+import system.proxies.HttpMessage;
 
 public class StartSEO extends CustomJavaAction<java.lang.Void>
 {
@@ -66,16 +71,7 @@ public class StartSEO extends CustomJavaAction<java.lang.Void>
 	    @Override
 	    public void processRequest(IMxRuntimeRequest iMxRuntimeRequest, IMxRuntimeResponse iMxRuntimeResponse, String s) throws Exception {
 	        
-	        String response = null;
-	        
-	        HttpRequest httpRequestParameter = getHTTPRequest(context, iMxRuntimeRequest);
-	        
-	        response = Core.microflowCall(robots_mf)
-	        		.withParam("HttpRequest", httpRequestParameter.getMendixObject())
-	        		.execute(context);
-	        iMxRuntimeResponse.getWriter().write(response);
-	        iMxRuntimeResponse.setStatus(HttpServletResponse.SC_OK);
-	        iMxRuntimeResponse.getWriter().flush();
+	    	setResponse(context, iMxRuntimeRequest,iMxRuntimeResponse, robots_mf);
 	    }
 	}
 	
@@ -89,18 +85,49 @@ public class StartSEO extends CustomJavaAction<java.lang.Void>
 	    @Override
 	    public void processRequest(IMxRuntimeRequest iMxRuntimeRequest, IMxRuntimeResponse iMxRuntimeResponse, String s) throws Exception {
 	        
-	        String response = null;
-	        HttpRequest httpRequestParameter = getHTTPRequest(context, iMxRuntimeRequest);
-	        
-	        response = Core.microflowCall(sitemap_mf)
-	        		.withParam("HttpRequest", httpRequestParameter.getMendixObject())
-	        		.execute(context);
-	        iMxRuntimeResponse.getWriter().write(response);
-	        iMxRuntimeResponse.addHeader("Content-type", "application/xml");
-	        iMxRuntimeResponse.setStatus(HttpServletResponse.SC_OK);
-	        iMxRuntimeResponse.getWriter().flush();
+	    	setResponse(context, iMxRuntimeRequest,iMxRuntimeResponse, sitemap_mf);
 	    }
 	}
+	
+	private void setResponse(IContext context, IMxRuntimeRequest iMxRuntimeRequest, IMxRuntimeResponse iMxRuntimeResponse, String mfToExecute) throws IOException {
+		Object mfOutput = null;
+        HttpRequest httpRequestParameter = getHTTPRequest(context, iMxRuntimeRequest);
+        
+        mfOutput = Core.microflowCall(mfToExecute)
+        		.withParam("HttpRequest", httpRequestParameter.getMendixObject())
+        		.execute(context);
+        
+        if(mfOutput instanceof String) {
+        	String response = (String)mfOutput;
+        	if(!response.isEmpty()) {
+        		iMxRuntimeResponse.getWriter().write((String) response);
+        	}
+	        iMxRuntimeResponse.addHeader("Content-type", "application/xml");
+	        iMxRuntimeResponse.setStatus(HttpServletResponse.SC_OK);
+        }
+        else if(mfOutput instanceof IMendixObject) {
+        	
+        	if (((IMendixObject) mfOutput).getType().equals(HttpResponse.getType())) {
+        		HttpResponse httpResponse = HttpResponse.initialize(context, (IMendixObject)mfOutput);
+        		
+        		if(httpResponse.getContent()!=null) {
+        			iMxRuntimeResponse.getWriter().write(httpResponse.getContent());
+        		}
+        		
+        		setHttpHeaders(context, iMxRuntimeResponse, httpResponse);
+    	        
+    	        iMxRuntimeResponse.setStatus(httpResponse.getStatusCode());
+        	}
+        	else {
+        		throw new InvalidParameterException("Expected a return variable for the microflow" + mfToExecute + " to be of type \"System.HttpResponse\"");
+        	}
+        	
+        }
+        
+        iMxRuntimeResponse.getWriter().flush();
+		
+	}
+	
 	private HttpRequest getHTTPRequest(IContext context, IMxRuntimeRequest iMxRuntimeRequest) throws IOException {
 		HttpRequest httpRequest = new HttpRequest(getContext());
 		
@@ -124,5 +151,16 @@ public class StartSEO extends CustomJavaAction<java.lang.Void>
 		return httpRequest;
 	}
 	
+	private void setHttpHeaders(IContext context, IMxRuntimeResponse iMxRuntimeResponse, HttpResponse httpResponse) {
+			
+		 HttpMessage httpMessage = HttpMessage.initialize(context, httpResponse.getMendixObject());
+		
+		 List<IMendixObject> httpHeaders = Core.retrieveByPath(context, httpMessage.getMendixObject(), HttpHeader.MemberNames.HttpHeaders.toString());
+		 
+		 for(IMendixObject obj : httpHeaders) {
+			 HttpHeader httpHeader = HttpHeader.initialize(context, obj);
+			 iMxRuntimeResponse.addHeader(httpHeader.getKey(), httpHeader.getValue());
+		 }
+	}
 	// END EXTRA CODE
 }
