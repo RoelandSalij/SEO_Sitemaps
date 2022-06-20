@@ -18,6 +18,8 @@ This folder contains the steps that need to be taken to set up the module.
 - Configure the robots txt microflow, e.g. `GetRobotsTXT`
 - Configure the sitemap xml microflow, e.g. `GetSiteMapXML`
 
+Both `GetRobotsTXT` and `GetSiteMapXML` microflows should either return a `String` type or a `System.HttpResponse` entity object. Using the HttpResponse object gives you more freedom, e.g. adding additional HTTP Headers to the response.
+
 ### Canonical Domain
 To make sure you’re not having content indexed for different domains where the content is actually the same you can configure the `CanonicalDomain` constant.
 
